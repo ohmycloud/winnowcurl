@@ -3,7 +3,7 @@ pub mod curl_parsers;
 use url::Url;
 
 #[derive(Debug, Clone)]
-pub(crate) enum Curl {
+pub enum Curl {
     Method(String),
     URL(Url),
     Header(String),
@@ -28,5 +28,9 @@ impl Curl {
     pub fn new_as_flag(identifier: &str) -> Option<Self> {
         // TODO: Do more check to ensure it's a flag param for curl
         Some(Curl::Flag(identifier.into()))
+    }
+
+    pub fn new_as_url(url: url::Url) -> Self {
+        Curl::URL(url)
     }
 }
