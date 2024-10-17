@@ -1,6 +1,6 @@
 [package]
 name = "nomcurl"
-authors=["Unic"]
+authors = ["Unic"]
 version = "0.1.0"
 edition = "2021"
 

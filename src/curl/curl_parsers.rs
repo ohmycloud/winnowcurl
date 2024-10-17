@@ -1,12 +1,14 @@
 use nom::{
     branch::alt,
-    bytes::complete::{escaped, tag, take_until, take_while},
+    bytes::complete::{escaped, is_not, tag, take_until, take_while},
     character::{
         self,
-        complete::{line_ending, multispace0, multispace1, none_of, space1},
+        complete::{char, line_ending, multispace0, multispace1, none_of, one_of, space1},
+        streaming::alphanumeric0,
     },
-    combinator::{all_consuming, eof, map, recognize},
+    combinator::{all_consuming, eof, map, recognize, rest},
     error::{context, Error, ErrorKind, ParseError},
+    multi::{fold_many0, many0, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult,
 };
@@ -40,18 +42,8 @@ fn double_quoted_data_parse(input: &str) -> IResult<&str, &str> {
     context(
         "Double quoted data parse",
         preceded(
-            alt((multispace0, line_ending)),
-            delimited(
-                character::complete::char('\"'),
-                take_while(|c: char| c != '\"'),
-                // TODO: Fix this func
-                // escaped(
-                //     take_while(|c: char| c != '"' && c != '\\'),
-                //     '\\',
-                //     none_of("\"\\"),
-                // ),
-                character::complete::char('\"'),
-            ),
+            tuple((multispace0, char('\"'))),
+            terminated(take_until("\""), tuple((char('\"'), multispace0))),
         ),
     )(input)
 }
@@ -60,22 +52,15 @@ fn double_quoted_data_parse(input: &str) -> IResult<&str, &str> {
 fn single_quoted_data_parse(input: &str) -> IResult<&str, &str> {
     context(
         "Single quoted data parse",
-        delimited(
-            character::complete::char('\''),
-            // TODO: Fix this func
-            // take_while(|c: char| c != '\''),
-            escaped(
-                take_while(|c: char| c != '\'' && c != '\\'),
-                '\\',
-                none_of("'\\"),
-            ),
-            character::complete::char('\''),
+        preceded(
+            tuple((multispace0, char('\''))),
+            terminated(take_until("\'"), tuple((char('\''), multispace0))),
         ),
     )(input)
 }
 
 /// Get the longest one quoted data between single / double quoted data.
-pub fn quoted_data_parse<'a>(input: &str) -> IResult<&str, &str> {
+fn quoted_data_parse<'a>(input: &str) -> IResult<&str, &str> {
     let double_res = double_quoted_data_parse(input);
     let single_res = single_quoted_data_parse(input);
 
@@ -102,6 +87,20 @@ pub fn quoted_data_parse<'a>(input: &str) -> IResult<&str, &str> {
         );
         Err(nom::Err::Failure(Error::new(&input, ErrorKind::Fail)))
     }
+}
+
+pub fn iter_quoted_data_parse(input: &str) -> IResult<&str, Vec<String>> {
+    context(
+        "Iter quoted data parse",
+        fold_many0(
+            alt((double_quoted_data_parse, single_quoted_data_parse)),
+            Vec::new,
+            |mut acc: Vec<String>, item| {
+                acc.push(item.into());
+                acc
+            },
+        ),
+    )(input)
 }
 
 pub fn method_parse(input: &str) -> IResult<&str, Curl> {
@@ -179,7 +178,7 @@ mod tests {
     fn test_single_quoted_data_parse() {
         let expect = " hhdf,\\fjsdfjl**''";
         let input = format!(
-            r##"{}Curl asdjfnv{}"{}" woaini "{}'nmihao'"##,
+            r##"{}{}"{}" woaini "{}'nmihao'"##,
             "\t \r  \n ", "\n ", expect, " \r \n "
         )
         .exchange_quotes();
@@ -187,7 +186,7 @@ mod tests {
         let result = single_quoted_data_parse(&input);
         assert!(result.is_ok(), "The result is: ({:?})", result);
 
-        let (rest, data) = result.unwrap();
+        let (_rest, data) = result.unwrap();
         assert_eq!(
             expect.exchange_quotes(),
             data,
@@ -199,16 +198,16 @@ mod tests {
 
     #[test]
     fn test_double_quoted_data_parse() {
-        let expect = r#" hhdf,\\fjsdfjl**''" woaini "#;
+        let expect = r#" hhdf,\\fjsdfjl**''"#;
         let input = format!(
-            r##"{}Curl asdjfnv{}"{}" woaini "{}'nmihao'"##,
+            r##"{}{}"{}" woaini "{}'nmihao'"##,
             "\t \r  \n ", "\n ", expect, " \r \n "
         );
-        println!("{}", input);
+        // println!("{}", input);
         let result = double_quoted_data_parse(&input);
-        println!("{:?}", result);
+        // println!("{:?}", result);
         assert!(result.is_ok());
-        let (rest, data) = result.unwrap();
+        let (_rest, data) = result.unwrap();
         assert_eq!(
             expect, data,
             "The expect:\r\n({}) should be same with the data:\r\n({})",
@@ -218,14 +217,11 @@ mod tests {
 
     #[test]
     fn test_quoted_data_parse() {
-        let expect = " hhdf,\\fjsdfjl**''\" woaini ";
-        let input = format!(
-            "\t \r  \n Curl asdjfnv\n \"{}\" woaini \" \r \n 'nmihao'",
-            expect
-        );
+        let expect = " hhdf,\\fjsdfjl**''";
+        let input = format!("\t \r  \n \n \"{}\" woaini \" \r \n 'nmihao'", expect);
         let result = quoted_data_parse(&input);
         assert!(!result.is_err());
-        let (rest, data) = result.unwrap();
+        let (_rest, data) = result.unwrap();
         assert_eq!(
             expect, data,
             "The expect:\r\n({}) should be same with the data:\r\n({})",
@@ -234,10 +230,35 @@ mod tests {
     }
 
     #[test]
+    fn test_iter_quoted_data_parse() {
+        let expect = vec![" hhdf,\\fjsdfjl**''", "nmihao"];
+        let input = format!("\t \r  \n \n \"{}\"   \r \n '{}'", expect[0], expect[1]);
+        let result = iter_quoted_data_parse(&input);
+        assert!(!result.is_err());
+        let (_rest, data) = result.unwrap();
+        assert_eq!(
+            expect, data,
+            "The expect:\r\n({:#?}) should be same with the data:\r\n({:#?})",
+            expect, data
+        );
+
+        let expect = vec![" hhdf,\\fjsdfjl**''", "nmihao"];
+        let input = format!("\t \r  \n \n \"{}\" \r \n \"{}\"", expect[0], expect[1]);
+        let result = iter_quoted_data_parse(&input);
+        assert!(!result.is_err());
+        let (_rest, data) = result.unwrap();
+        assert_eq!(
+            expect, data,
+            "The expect:\r\n({:#?}) should be same with the data:\r\n({:#?})",
+            expect, data
+        );
+    }
+
+    #[test]
     fn test_method_parse() {
         let cmd = "\t \r  \n Curl asdjfnv\n".trim_start();
         let len = &cmd.len();
-        remove_curl_cmd_header(cmd);
+        let cmd = remove_curl_cmd_header(cmd);
         assert_eq!(len - 4, cmd.len());
         assert_ne!("l", cmd.take(1));
         assert_eq!(" ", cmd.take(1))
