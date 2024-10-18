@@ -1,7 +1,9 @@
 [package]
 name = "nomcurl"
+description = "nomcurl is a library written in Rust that uses the nom library to parse cURL commands. It can handle various cURL options, including methods, headers, data, and flags."
 authors = ["Unic"]
-version = "0.1.0"
+version = "0.1.8"
+license = "MIT"
 edition = "2021"
 
 [dependencies]
