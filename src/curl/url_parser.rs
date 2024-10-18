@@ -301,34 +301,37 @@ mod tests {
         ];
         let input = vec!["hTtP", "HTTPS", "Ftp", "smB", "asbsdf"];
 
-        let mut result: Vec<Protocol> = Vec::new();
-        for p in input {
-            result.push(p.into());
+        fn str_into_protocol(input: Vec<&str>) -> Vec<Protocol> {
+            let mut result: Vec<Protocol> = Vec::new();
+            for p in input {
+                result.push(p.into());
+            }
+            result
         }
 
-        assert_eq!(
-            expect, result,
-            "The expect:\r\n({:?}) should be same with the result:\r\n({:?})",
-            expect, result
-        )
+        generic_parse(str_into_protocol, input, expect);
     }
 
     #[test]
     fn test_protocol_parse() {
         let input = TEST_URL_FULL;
         let expect = "https";
+
         generic_command_parse(protocol_parse, input, expect.into());
 
         let expect = "smb";
         let input = input.replace("https", expect);
+
         generic_command_parse(protocol_parse, &input, expect.into());
 
         let expect = "FTP";
         let input = input.replace("smb", expect);
+
         generic_command_parse(protocol_parse, &input, expect.into());
 
         let expect = "abc";
         let input = input.replace("FTP", expect);
+
         generic_command_parse(protocol_parse, &input, expect.into());
     }
 
@@ -336,6 +339,7 @@ mod tests {
     fn test_credentials_domain_parse() {
         let input = TEST_URL_FULL.replace("https://", "");
         let expect = "user:passwd@github.com";
+
         generic_command_parse(credentials_domain_parse, &input, expect);
     }
 
@@ -343,6 +347,7 @@ mod tests {
     fn test_credentials_domain_to_userinfo_parse() {
         let input = "user:passwd@github.com";
         let expect = "user:passwd";
+
         generic_command_parse(credentials_domain_to_userinfo_parse, input, expect);
     }
 
@@ -350,6 +355,7 @@ mod tests {
     fn test_credentials_domain_to_host_parse() {
         let input = "user:passwd@github.com";
         let expect = "github.com";
+
         generic_command_parse(credentials_domain_to_host_parse, input, expect);
     }
 
@@ -357,6 +363,7 @@ mod tests {
     fn test_uri_parse() {
         let input = TEST_URL_FULL.replace("https://user:passwd@github.com", "");
         let expect = "/rust-lang/rust/issues";
+
         generic_command_parse(uri_parse, &input, expect);
     }
 
@@ -364,6 +371,7 @@ mod tests {
     fn test_uri_to_path_fragments() {
         let input = "/rust-lang/rust/issues";
         let expect = vec!["rust-lang", "rust", "issues"];
+
         generic_parse(uri_to_path_fragments, input, expect);
     }
 
@@ -372,6 +380,7 @@ mod tests {
         let input =
             TEST_URL_FULL.replace("https://user:passwd@github.com/rust-lang/rust/issues", "");
         let expect = "?labels=E-easy&state=open";
+
         generic_command_parse(queries_parse, &input, expect);
     }
 
@@ -382,6 +391,7 @@ mod tests {
             ("labels".to_string(), "E-easy".to_string()),
             ("state".to_string(), "open".to_string()),
         ];
+
         generic_parse(queries_to_query_fragments, input, expect);
     }
 
@@ -392,6 +402,7 @@ mod tests {
             "",
         );
         let expect = "ABC";
+
         generic_command_parse(fragment_parse, &input, expect);
     }
 }

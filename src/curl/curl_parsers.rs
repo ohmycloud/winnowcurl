@@ -442,27 +442,15 @@ mod tests {
 
     #[test]
     fn test_iter_quoted_data_parse() {
-        let expect = vec![" hhdf,\\fjsdfjl**''", "nmihao"];
+        let expect: Vec<String> = vec![" hhdf,\\fjsdfjl**''".into(), "nmihao".into()];
         let input = format!("\t \r  \n \n \"{}\"   \r \n '{}'", expect[0], expect[1]);
-        let result = iter_quoted_data_parse(&input);
-        assert!(result.is_ok());
-        let (_rest, data) = result.unwrap();
-        assert_eq!(
-            expect, data,
-            "The expect:\r\n({:#?}) should be same with the data:\r\n({:#?})",
-            expect, data
-        );
 
-        let expect = vec![" hhdf,\\fjsdfjl**''", "nmihao"];
+        generic_command_parse(iter_quoted_data_parse, &input, expect);
+
+        let expect = vec![" hhdf,\\fjsdfjl**''".into(), "nmihao".into()];
         let input = format!("\t \r  \n \n \"{}\" \r \n \"{}\"", expect[0], expect[1]);
-        let result = iter_quoted_data_parse(&input);
-        assert!(result.is_ok());
-        let (_rest, data) = result.unwrap();
-        assert_eq!(
-            expect, data,
-            "The expect:\r\n({:#?}) should be same with the data:\r\n({:#?})",
-            expect, data
-        );
+
+        generic_command_parse(iter_quoted_data_parse, &input, expect);
     }
 
     #[test]
