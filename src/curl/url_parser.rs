@@ -1,15 +1,16 @@
 use nom::{
-    bytes::complete::tag,
+    bytes::complete::{tag, take_till},
     character::{
         self,
-        complete::{alpha1, multispace0},
-        streaming::alphanumeric0,
+        complete::{alpha1, alphanumeric0, alphanumeric1, multispace0},
     },
-    combinator::map,
+    combinator::{map, map_res, rest},
     error::context,
     sequence::{preceded, terminated, tuple},
     IResult,
 };
+
+const LOCALHOST: &'static str = "localhost";
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Protocol {
@@ -39,6 +40,26 @@ impl From<&str> for Protocol {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UserInfo(String, String);
+
+impl UserInfo {
+    pub fn new(userinfo: &str) -> Option<Self> {
+        if userinfo.is_empty() {
+            return None;
+            panic!("userinfo should not be empty");
+        }
+        let mut res = userinfo.splitn(2, ':');
+        let name = res.next().unwrap_or("").to_string();
+        let pwd = res.next().unwrap_or("").to_string();
+        Some(Self(name, pwd))
+    }
+
+    pub fn new_explicit(name: &str, pwd: &str) -> Self {
+        if name.is_empty() {
+            panic!("userinfo should not be empty");
+        }
+        Self(name.into(), pwd.into())
+    }
+}
 
 /// Example url: "https://user:passwd@github.com/rust-lang/rust/issues?labels=E-easy&state=open#ABC"
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -84,6 +105,51 @@ impl CurlURL {
     }
 }
 
+/// Parse whole url to entity
+pub fn curl_url_parse(input: &str) -> IResult<&str, CurlURL> {
+    context(
+        "curl_url_parse",
+        map_res(
+            tuple((
+                protocol_parse,
+                credentials_domain_parse,
+                uri_parse,
+                queries_parse,
+                fragment_parse,
+            )),
+            |(p, d, u, q, f)| {
+                let userinfo = match credentials_domain_to_userinfo_parse(&d) {
+                    Ok((_, userinfo)) => userinfo,
+                    Err(e) => {
+                        return Err(e);
+                    }
+                };
+
+                let domain = match credentials_domain_to_host_parse(&d) {
+                    Ok((_, domain)) => domain,
+                    Err(e) => {
+                        return Err(e);
+                    }
+                };
+
+                let queries = queries_to_query_fragments(q);
+                let mut curl_url = CurlURL::new(&p, domain);
+
+                curl_url
+                    .set_uri(u.into())
+                    .set_queries(queries)
+                    .set_fragment(f);
+
+                if let Some(ui) = UserInfo::new(userinfo) {
+                    curl_url.set_userinfo(ui);
+                };
+
+                Ok(curl_url)
+            },
+        ),
+    )(input)
+}
+
 /// Parse the protocol: HTTP/HTTPS/FTP/SMB...
 pub fn protocol_parse(input: &str) -> IResult<&str, String> {
     context(
@@ -106,36 +172,69 @@ pub fn protocol_parse(input: &str) -> IResult<&str, String> {
     )(input)
 }
 
-pub fn domain_parse(input: &str) -> IResult<&str, &str> {
-    context("domain_parse", multispace0)(input)
+/// Example: user:passwd@github.com
+pub fn credentials_domain_parse(input: &str) -> IResult<&str, &str> {
+    context("credentials_domain_parse", take_till(|c| c == '/'))(input)
 }
 
-pub fn domain_to_userinfo_parse(input: &str) -> IResult<&str, &str> {
-    todo!();
+/// Example: user:passwd
+pub fn credentials_domain_to_userinfo_parse(input: &str) -> IResult<&str, &str> {
+    context("domain_to_userinfo_parse", take_till(|c| c == '@'))(input)
 }
 
-pub fn domain_to_host_parse(input: &str) -> IResult<&str, &str> {
-    todo!();
+/// Example: github.com
+pub fn credentials_domain_to_host_parse(input: &str) -> IResult<&str, &str> {
+    context(
+        "domain_to_userinfo_parse",
+        preceded(take_till(|c| c == '@'), map(rest, |host: &str| &host[1..])),
+    )(input)
 }
 
+/// Example: /rust-lang/rust/issues  --> vec![path_fragment]
 pub fn uri_parse(input: &str) -> IResult<&str, &str> {
-    todo!();
+    context("uri_parse", take_till(|c| c == '?'))(input)
 }
 
-fn uri_to_path_fragments(input: &str) -> Vec<String> {
-    todo!()
+/// Example: vec![rust-lang,rust,issues]
+fn uri_to_path_fragments(input: &str) -> Vec<&str> {
+    input.split('/').filter(|pf| !pf.is_empty()).collect()
 }
 
+/// Example: ?labels=E-easy&state=open --> vec![query_fragment]
 pub fn queries_parse(input: &str) -> IResult<&str, &str> {
-    todo!();
+    context("queries_parse", take_till(|c| c == '#'))(input)
 }
 
+/// Example: vec![(labels,E-easy),(state,open)]
 fn queries_to_query_fragments(input: &str) -> Vec<(String, String)> {
-    todo!()
+    // if '?' exists at the start of queries
+    let queries = if input.starts_with('?') {
+        &input[1..]
+    } else {
+        input
+    };
+
+    queries
+        .split('&')
+        .filter(|pf| !pf.is_empty())
+        .map(|query| {
+            let mut parts = query.splitn(2, '='); // use splitn to set the maxmium splitted items
+            let key = parts.next().unwrap_or("");
+            let value = parts.next().unwrap_or("");
+            (key.into(), value.into())
+        })
+        .collect()
 }
 
+/// Example: #ABC
 pub fn fragment_parse(input: &str) -> IResult<&str, &str> {
-    todo!();
+    context(
+        "fragment_parse",
+        map(
+            tuple((character::complete::char('#'), alphanumeric1)),
+            |(_sharp, fragment)| fragment,
+        ),
+    )(input)
 }
 
 #[cfg(test)]
