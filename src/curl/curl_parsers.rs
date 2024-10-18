@@ -260,9 +260,7 @@ pub fn curl_cmd_parse(input: &str) -> IResult<&str, Vec<Curl>> {
 mod tests {
     use nom::InputTake;
     // use url::Url;
-
-    use crate::curl::url_parser::CurlURL;
-    use crate::test_util::{generic_command_parse, generic_parse};
+    use crate::test_util::generic_command_parse;
     use crate::{curl::url_parser, new_curl};
 
     use super::*;
