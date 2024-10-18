@@ -2,9 +2,22 @@
 name = "nomcurl"
 description = "nomcurl is a library written in Rust that uses the nom library to parse cURL commands. It can handle various cURL options, including methods, headers, data, and flags."
 authors = ["Unic"]
+repository = "https://github.com/YuniqueUnic/nomcurl"
+readme = "./readme.md"
+keywords = ["parser", "nom", "curl", "cmd"]
 version = "0.1.8"
 license = "MIT"
 edition = "2021"
+
+include = [
+    "LICENSE",
+    "readme.md",
+    "readme-cn.md",
+    ".gitignore",
+    "Cargo.toml",
+    "src/*.rs",
+    "src/*/*.rs",
+]
 
 [dependencies]
 nom = "7.1.3"
