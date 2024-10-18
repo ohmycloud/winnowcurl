@@ -1,7 +1,8 @@
 pub mod curl_parsers;
 pub mod url_parser;
 
-use url::Url;
+// use url::Url;
+use url_parser::CurlURL;
 
 #[macro_export]
 macro_rules! new_curl {
@@ -13,7 +14,7 @@ macro_rules! new_curl {
     };
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct CurlStru {
     pub identifier: String,
     pub data: Option<String>,
@@ -39,10 +40,11 @@ impl CurlStru {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Curl {
     Method(CurlStru),
-    URL(Url),
+    // URL(Url),
+    URL(CurlURL),
     Header(CurlStru),
     Data(CurlStru),
     Flag(CurlStru),
@@ -74,7 +76,11 @@ impl Curl {
         }
     }
 
-    pub fn new_as_url(url: url::Url) -> Self {
+    pub fn new_as_url(url: CurlURL) -> Self {
         Curl::URL(url)
     }
+
+    // pub fn new_as_url(url: url::Url) -> Self {
+    //     Curl::URL(url)
+    // }
 }

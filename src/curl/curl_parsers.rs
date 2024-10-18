@@ -14,6 +14,8 @@ use nom::{
 
 use crate::curl::Curl;
 
+use super::url_parser;
+
 const CURL_CMD: &str = "curl";
 pub fn is_curl(input: &str) -> bool {
     input.trim_start().to_lowercase().starts_with(CURL_CMD)
@@ -29,8 +31,9 @@ pub fn url_parse(input: &str) -> IResult<&str, Curl> {
         preceded(
             multispace0,
             map_res(quoted_data_parse, |d| {
-                let url_parsed = url::Url::parse(d);
-                if let Ok(u) = url_parsed {
+                // let url_parsed = url::Url::parse(d);
+                let url_parsed = url_parser::curl_url_parse(d);
+                if let Ok((_, u)) = url_parsed {
                     Ok(Curl::new_as_url(u))
                 } else {
                     Err(url_parsed)
@@ -96,13 +99,13 @@ fn quoted_data_parse<'a>(input: &str) -> IResult<&str, &str> {
         double_res
     } else {
         // Both parsing failed, return an error
-        let single_err = single_res.unwrap_err();
-        let double_err = double_res.unwrap_err();
+        let _single_err = single_res.unwrap_err();
+        let _double_err = double_res.unwrap_err();
 
         #[cfg(feature = "debug-print")]
         eprintln!(
             "The origin: ({})\r\nThe single parse error: {}\r\nThe double parse error: {}",
-            input, single_err, double_err
+            input, _single_err, _double_err
         );
 
         Err(nom::Err::Failure(Error::new(&input, ErrorKind::Fail)))
@@ -256,9 +259,11 @@ pub fn curl_cmd_parse(input: &str) -> IResult<&str, Vec<Curl>> {
 #[cfg(test)]
 mod tests {
     use nom::InputTake;
-    use url::Url;
+    // use url::Url;
 
-    use crate::new_curl;
+    use crate::curl::url_parser::CurlURL;
+    use crate::test_util::{generic_command_parse, generic_parse};
+    use crate::{curl::url_parser, new_curl};
 
     use super::*;
 
@@ -282,22 +287,6 @@ mod tests {
         }
     }
 
-    fn generic_command_parse<F, I, T>(parser: F, input: I, expect: T)
-    where
-        F: Fn(I) -> IResult<I, T>,
-        T: PartialEq + std::fmt::Debug,
-        I: std::fmt::Debug,
-    {
-        let result = parser(input);
-        assert!(result.is_ok(), "The result:\r\n{:#?}", result);
-        let (rest, method) = result.unwrap();
-        assert_eq!(
-            expect, method,
-            "The expect:\r\n({:?}) should be same with the result:\r\n({:?})",
-            expect, method
-        );
-    }
-
     const TEST_CURL_CMD_FULL: &'static str = r#"
         curl 'http://query.sse.com.cn/commonQuery.do?jsonCallBack=jsonpCallback89469743&sqlId=COMMON_SSE_SJ_GPSJ_CJGK_MRGK_C&PRODUCT_CODE=01%2C02%2C03%2C11%2C17&type=inParams&SEARCH_DATE=2024-03-18&_=1710914422498'  \
         -H 'Accept: */*' -X 'TEST' \
@@ -316,10 +305,16 @@ mod tests {
     #[test]
     fn test_curl_cmd_parse() {
         let full_url_str = "http://query.sse.com.cn/commonQuery.do?jsonCallBack=jsonpCallback89469743&sqlId=COMMON_SSE_SJ_GPSJ_CJGK_MRGK_C&PRODUCT_CODE=01%2C02%2C03%2C11%2C17&type=inParams&SEARCH_DATE=2024-03-18&_=1710914422498";
-        let expect_url = match Url::parse(full_url_str) {
+        // let expect_url = match Url::parse(full_url_str) {
+        //     Ok(u) => u,
+        //     Err(e) => panic!("Error: {:?}", e),
+        // };
+
+        let (_, expect_url) = match url_parser::curl_url_parse(full_url_str) {
             Ok(u) => u,
             Err(e) => panic!("Error: {:?}", e),
         };
+
         let _url = Curl::new_as_url(expect_url);
 
         let input = TEST_CURL_CMD_FULL;
@@ -364,10 +359,15 @@ mod tests {
     #[test]
     fn test_url_parse() {
         let full_url_str = "http://query.sse.com.cn/commonQuery.do?jsonCallBack=jsonpCallback89469743&sqlId=COMMON_SSE_SJ_GPSJ_CJGK_MRGK_C&PRODUCT_CODE=01%2C02%2C03%2C11%2C17&type=inParams&SEARCH_DATE=2024-03-18&_=1710914422498";
-        let expect_url = match Url::parse(full_url_str) {
+        let (_, expect_url) = match url_parser::curl_url_parse(full_url_str) {
             Ok(u) => u,
             Err(e) => panic!("Error: {:?}", e),
         };
+
+        // let expect_url = match Url::parse(full_url_str) {
+        //     Ok(u) => u,
+        //     Err(e) => panic!("Error: {:?}", e),
+        // };
 
         let expect = Curl::new_as_url(expect_url);
         let input = format!(" curl \r \t   '{}' \\ \r\n-H 'Accept: */*'", full_url_str);

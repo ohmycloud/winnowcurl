@@ -4,13 +4,11 @@ use nom::{
         self,
         complete::{alpha1, alphanumeric0, alphanumeric1, multispace0},
     },
-    combinator::{map, map_res, rest},
-    error::context,
-    sequence::{preceded, terminated, tuple},
+    combinator::{map, map_res, opt},
+    error::{context, Error, ErrorKind},
+    sequence::{preceded, tuple},
     IResult,
 };
-
-const LOCALHOST: &'static str = "localhost";
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Protocol {
@@ -33,6 +31,7 @@ impl From<&str> for Protocol {
             "http" => Self::HTTP,
             "https" => Self::HTTPS,
             "ftp" => Self::FTP,
+            "smb" => Self::SMB,
             _ => Self::TODO,
         }
     }
@@ -45,7 +44,7 @@ impl UserInfo {
     pub fn new(userinfo: &str) -> Option<Self> {
         if userinfo.is_empty() {
             return None;
-            panic!("userinfo should not be empty");
+            // panic!("userinfo should not be empty");
         }
         let mut res = userinfo.splitn(2, ':');
         let name = res.next().unwrap_or("").to_string();
@@ -89,8 +88,8 @@ impl CurlURL {
         self
     }
 
-    pub fn set_uri(&mut self, uri: String) -> &mut Self {
-        self.uri = Some(uri);
+    pub fn set_uri(&mut self, uri: &str) -> &mut Self {
+        self.uri = Some(uri.into());
         self
     }
 
@@ -113,18 +112,11 @@ pub fn curl_url_parse(input: &str) -> IResult<&str, CurlURL> {
             tuple((
                 protocol_parse,
                 credentials_domain_parse,
-                uri_parse,
-                queries_parse,
-                fragment_parse,
+                opt(uri_parse),
+                opt(queries_parse),
+                opt(fragment_parse),
             )),
             |(p, d, u, q, f)| {
-                let userinfo = match credentials_domain_to_userinfo_parse(&d) {
-                    Ok((_, userinfo)) => userinfo,
-                    Err(e) => {
-                        return Err(e);
-                    }
-                };
-
                 let domain = match credentials_domain_to_host_parse(&d) {
                     Ok((_, domain)) => domain,
                     Err(e) => {
@@ -132,17 +124,26 @@ pub fn curl_url_parse(input: &str) -> IResult<&str, CurlURL> {
                     }
                 };
 
-                let queries = queries_to_query_fragments(q);
                 let mut curl_url = CurlURL::new(&p, domain);
 
-                curl_url
-                    .set_uri(u.into())
-                    .set_queries(queries)
-                    .set_fragment(f);
+                if let Some(uri) = u {
+                    curl_url.set_uri(uri);
+                }
 
-                if let Some(ui) = UserInfo::new(userinfo) {
-                    curl_url.set_userinfo(ui);
-                };
+                if let Some(queries) = q {
+                    let queries = queries_to_query_fragments(queries);
+                    curl_url.set_queries(queries);
+                }
+
+                if let Some(fragment) = f {
+                    curl_url.set_fragment(fragment);
+                }
+
+                if let Ok((_, userinfo)) = credentials_domain_to_userinfo_parse(&d) {
+                    if let Some(ui) = UserInfo::new(userinfo) {
+                        curl_url.set_userinfo(ui);
+                    };
+                }
 
                 Ok(curl_url)
             },
@@ -179,15 +180,37 @@ pub fn credentials_domain_parse(input: &str) -> IResult<&str, &str> {
 
 /// Example: user:passwd
 pub fn credentials_domain_to_userinfo_parse(input: &str) -> IResult<&str, &str> {
-    context("domain_to_userinfo_parse", take_till(|c| c == '@'))(input)
+    // let colon_index = input.find(':');
+    let at_index = input.find('@');
+
+    if let Some(at) = at_index {
+        // if let Some(colon) = colon_index {
+        //     if colon < at {
+        //         // It means that :...@ which shows that crediential may in the str
+        let userinfo = &input[0..at];
+        return IResult::Ok((&input[at + 1..], userinfo));
+        //     }
+        // }
+    }
+
+    IResult::Err(nom::Err::Failure(Error::new(&input, ErrorKind::Fail)))
 }
 
 /// Example: github.com
 pub fn credentials_domain_to_host_parse(input: &str) -> IResult<&str, &str> {
-    context(
-        "domain_to_userinfo_parse",
-        preceded(take_till(|c| c == '@'), map(rest, |host: &str| &host[1..])),
-    )(input)
+    let at_index = input.find('@');
+
+    if let Some(at) = at_index {
+        // if let Some(colon) = colon_index {
+        //     if colon < at {
+        //         // It means that :...@ which shows that crediential may in the str
+        let userinfo = &input[0..at];
+        IResult::Ok((userinfo, &input[at + 1..]))
+        //     }
+        // }
+    } else {
+        IResult::Ok(("", input))
+    }
 }
 
 /// Example: /rust-lang/rust/issues  --> vec![path_fragment]
@@ -196,7 +219,7 @@ pub fn uri_parse(input: &str) -> IResult<&str, &str> {
 }
 
 /// Example: vec![rust-lang,rust,issues]
-fn uri_to_path_fragments(input: &str) -> Vec<&str> {
+pub fn uri_to_path_fragments(input: &str) -> Vec<&str> {
     input.split('/').filter(|pf| !pf.is_empty()).collect()
 }
 
@@ -206,7 +229,7 @@ pub fn queries_parse(input: &str) -> IResult<&str, &str> {
 }
 
 /// Example: vec![(labels,E-easy),(state,open)]
-fn queries_to_query_fragments(input: &str) -> Vec<(String, String)> {
+pub fn queries_to_query_fragments(input: &str) -> Vec<(String, String)> {
     // if '?' exists at the start of queries
     let queries = if input.starts_with('?') {
         &input[1..]
@@ -240,21 +263,31 @@ pub fn fragment_parse(input: &str) -> IResult<&str, &str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_util::{generic_command_parse, generic_parse};
 
-    fn generic_command_parse<F, I, T>(parser: F, input: I, expect: T)
-    where
-        F: Fn(I) -> IResult<I, T>,
-        T: PartialEq + std::fmt::Debug,
-        I: std::fmt::Debug,
-    {
-        let result = parser(input);
-        assert!(result.is_ok(), "The result:\r\n{:#?}", result);
-        let (rest, res) = result.unwrap();
-        assert_eq!(
-            expect, res,
-            "The expect:\r\n({:?}) should be same with the result:\r\n({:?})",
-            expect, res
-        );
+    const TEST_URL_FULL: &'static str =
+        "https://user:passwd@github.com/rust-lang/rust/issues?labels=E-easy&state=open#ABC";
+
+    #[test]
+    fn test_curl_url_parse() {
+        let input = TEST_URL_FULL;
+        let userinfo = UserInfo::new("user:passwd").unwrap();
+        let queries = queries_to_query_fragments("?labels=E-easy&state=open");
+        let mut expect = CurlURL::new("https", "github.com");
+        expect
+            .set_userinfo(userinfo)
+            .set_uri("/rust-lang/rust/issues")
+            .set_queries(queries)
+            .set_fragment("ABC");
+
+        generic_command_parse(curl_url_parse, &input, expect);
+
+        let input = "http://query.sse.com.cn/commonQuery.do?jsonCallBack=jsonpCallback89469743&sqlId=COMMON_SSE_SJ_GPSJ_CJGK_MRGK_C&PRODUCT_CODE=01%2C02%2C03%2C11%2C17&type=inParams&SEARCH_DATE=2024-03-18&_=1710914422498";
+        let queries = queries_to_query_fragments("?jsonCallBack=jsonpCallback89469743&sqlId=COMMON_SSE_SJ_GPSJ_CJGK_MRGK_C&PRODUCT_CODE=01%2C02%2C03%2C11%2C17&type=inParams&SEARCH_DATE=2024-03-18&_=1710914422498");
+        let mut expect = CurlURL::new("http", "query.sse.com.cn");
+        expect.set_uri("/commonQuery.do").set_queries(queries);
+
+        generic_command_parse(curl_url_parse, &input, expect);
     }
 
     #[test]
@@ -281,29 +314,84 @@ mod tests {
     }
 
     #[test]
-    fn test_protocol_parse() {}
+    fn test_protocol_parse() {
+        let input = TEST_URL_FULL;
+        let expect = "https";
+        generic_command_parse(protocol_parse, input, expect.into());
+
+        let expect = "smb";
+        let input = input.replace("https", expect);
+        generic_command_parse(protocol_parse, &input, expect.into());
+
+        let expect = "FTP";
+        let input = input.replace("smb", expect);
+        generic_command_parse(protocol_parse, &input, expect.into());
+
+        let expect = "abc";
+        let input = input.replace("FTP", expect);
+        generic_command_parse(protocol_parse, &input, expect.into());
+    }
 
     #[test]
-    fn test_domain_parse() {}
+    fn test_credentials_domain_parse() {
+        let input = TEST_URL_FULL.replace("https://", "");
+        let expect = "user:passwd@github.com";
+        generic_command_parse(credentials_domain_parse, &input, expect);
+    }
 
     #[test]
-    fn test_domain_to_userinfo_parse() {}
+    fn test_credentials_domain_to_userinfo_parse() {
+        let input = "user:passwd@github.com";
+        let expect = "user:passwd";
+        generic_command_parse(credentials_domain_to_userinfo_parse, input, expect);
+    }
 
     #[test]
-    fn test_domain_to_host_parse() {}
+    fn test_credentials_domain_to_host_parse() {
+        let input = "user:passwd@github.com";
+        let expect = "github.com";
+        generic_command_parse(credentials_domain_to_host_parse, input, expect);
+    }
 
     #[test]
-    fn test_uri_parse() {}
+    fn test_uri_parse() {
+        let input = TEST_URL_FULL.replace("https://user:passwd@github.com", "");
+        let expect = "/rust-lang/rust/issues";
+        generic_command_parse(uri_parse, &input, expect);
+    }
 
     #[test]
-    fn test_uri_to_path_fragments() {}
+    fn test_uri_to_path_fragments() {
+        let input = "/rust-lang/rust/issues";
+        let expect = vec!["rust-lang", "rust", "issues"];
+        generic_parse(uri_to_path_fragments, input, expect);
+    }
 
     #[test]
-    fn test_queries_parse() {}
+    fn test_queries_parse() {
+        let input =
+            TEST_URL_FULL.replace("https://user:passwd@github.com/rust-lang/rust/issues", "");
+        let expect = "?labels=E-easy&state=open";
+        generic_command_parse(queries_parse, &input, expect);
+    }
 
     #[test]
-    fn test_queries_to_query_fragments() {}
+    fn test_queries_to_query_fragments() {
+        let input = "?labels=E-easy&state=open";
+        let expect = vec![
+            ("labels".to_string(), "E-easy".to_string()),
+            ("state".to_string(), "open".to_string()),
+        ];
+        generic_parse(queries_to_query_fragments, input, expect);
+    }
 
     #[test]
-    fn test_fragment_parse() {}
+    fn test_fragment_parse() {
+        let input = TEST_URL_FULL.replace(
+            "https://user:passwd@github.com/rust-lang/rust/issues?labels=E-easy&state=open",
+            "",
+        );
+        let expect = "ABC";
+        generic_command_parse(fragment_parse, &input, expect);
+    }
 }
