@@ -1,14 +1,15 @@
 pub mod curl_parsers;
+pub mod url_parser;
 
 use url::Url;
 
 #[macro_export]
 macro_rules! new_curl {
     ($identifier:expr) => {
-        CurlStru::new($identifier)
+        Curl::new_as_flag($identifier).unwrap()
     };
     ($identifier:expr,$data:expr) => {
-        CurlStru::new_with_data(stringify!($identifier), $data)
+        Curl::new(stringify!($identifier), $data).unwrap()
     };
 }
 
@@ -57,13 +58,20 @@ impl Curl {
             "-X" => Some(Curl::Method(CurlStru::new_with_data(identifier, param))),
             "-H" => Some(Curl::Header(CurlStru::new_with_data(identifier, param))),
             "-d" | "--data" => Some(Curl::Data(CurlStru::new_with_data("-d", param))),
-            _ => todo!("Haven't implement it yet..."),
+            _ => {
+                eprintln!("Haven't implement it yet...");
+                None
+            }
         }
     }
 
     pub fn new_as_flag(identifier: &str) -> Option<Self> {
         // TODO: Do more check to ensure it's a flag param for curl
-        Some(Curl::Flag(CurlStru::new(identifier)))
+        if identifier.is_empty() {
+            None
+        } else {
+            Some(Curl::Flag(CurlStru::new(identifier)))
+        }
     }
 
     pub fn new_as_url(url: url::Url) -> Self {
