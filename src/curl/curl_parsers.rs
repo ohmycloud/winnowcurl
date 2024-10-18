@@ -5,7 +5,7 @@ use nom::{
         self,
         complete::{alphanumeric0, anychar, char, line_ending, multispace0, multispace1},
     },
-    combinator::{cond, map, map_res, peek, recognize, rest},
+    combinator::{cond, cut, map, map_res, peek, recognize, rest},
     error::{context, Error, ErrorKind},
     multi::fold_many0,
     sequence::{delimited, preceded, tuple},
@@ -43,15 +43,14 @@ pub fn url_parse(input: &str) -> IResult<&str, Curl> {
     )(input)
 }
 
-/// Identify the ending pattern: <space+>\<space*>\r\n
+/// Identify the ending pattern: <space*>\<space*>\r\n
 pub fn slash_line_ending(input: &str) -> IResult<&str, &str> {
     context(
         "Slash line ending",
         recognize(tuple((
-            multispace1,
+            multispace0,
             character::complete::char('\\'),
             multispace0,
-            line_ending,
         ))),
     )(input)
 }
@@ -166,7 +165,7 @@ macro_rules! parse_command {
             context(
                 stringify!($name),
                 preceded(
-                    multispace0,
+                    alt((multispace0,slash_line_ending)),
                     map(
                         tuple(( alt(($( tag($tag) ),+,)), multispace1, quoted_data_parse)),
                         |(method, _space, data)| Curl::new(method, data).unwrap(),
@@ -205,10 +204,10 @@ pub fn commands_parse(input: &str) -> IResult<&str, Vec<Curl>> {
     context(
         "all commands parse",
         fold_many0(
-            alt((methods_parse, headers_parse, datas_parse, flags_parse)),
+            cut(alt((method_parse, header_parse, data_parse, flag_parse))),
             Vec::new,
-            |mut acc, mut d| {
-                acc.append(&mut d);
+            |mut acc, d| {
+                acc.push(d);
                 acc
             },
         ),
@@ -218,7 +217,7 @@ pub fn commands_parse(input: &str) -> IResult<&str, Vec<Curl>> {
 pub fn curl_cmd_parse(input: &str) -> IResult<&str, Vec<Curl>> {
     if is_curl(input) {
         let mut curl_cmds = Vec::new();
-        let input = remove_curl_cmd_header(input); // Remove Curl header firstly
+        let input = remove_curl_cmd_header(input.trim_start()); // Remove Curl header firstly
         let url_p = url_parse(input); // Parse the Curl::URL
 
         let r = match url_p {
@@ -235,7 +234,7 @@ pub fn curl_cmd_parse(input: &str) -> IResult<&str, Vec<Curl>> {
         };
 
         // TODO: to parse commands..
-        let res = context("curl cmd parse", preceded(multispace0, commands_parse))(r);
+        let res = context("curl cmd parse", commands_parse)(r);
 
         if let Ok((_rest, mut cmds)) = res {
             curl_cmds.append(&mut cmds);
@@ -447,9 +446,36 @@ mod tests {
 
     #[test]
     fn test_commands_parse() {
-        // let expect =
+        let expect = vec![
+            Curl::Header(new_curl!(-H,"Accept: */*")),
+            Curl::Header(new_curl!(-H,"Accept-Language: en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7")),
+            Curl::Header(new_curl!(-H,"Cache-Control: no-cache")),
+            Curl::Header(new_curl!(-H,"Connection: keep-alive")),
+            Curl::Header(new_curl!(-H,"Cookie: gdp_user_id=gioenc-c2b256a9%2C5442%2C561b%2C9c02%2C71199e7e89g9; VISITED_MENU=%5B%228312%22%5D; ba17301551dcbaf9_gdp_session_id=2e27fee0-b184-4efa-a66f-f651e5be47e0; ba17301551dcbaf9_gdp_session_id_sent=2e27fee0-b184-4efa-a66f-f651e5be47e0; ba17301551dcbaf9_gdp_sequence_ids={%22globalKey%22:139%2C%22VISIT%22:4%2C%22PAGE%22:18%2C%22VIEW_CLICK%22:117%2C%22VIEW_CHANGE%22:3}")),
+            Curl::Header(new_curl!(-H,"Pragma: no-cache")),
+            Curl::Header(new_curl!(-H,"Referer: http://www.sse.com.cn/")),
+            Curl::Header(new_curl!(-H,"User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")),
+            Curl::Flag(new_curl!("--insecure")),
+        ];
 
-        // let input =
+        let input = r#"
+         \
+        -H 'Accept: */*' \
+        -H 'Accept-Language: en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7' \
+        -H 'Cache-Control: no-cache' \
+        -H 'Connection: keep-alive' \
+        -H 'Cookie: gdp_user_id=gioenc-c2b256a9%2C5442%2C561b%2C9c02%2C71199e7e89g9; VISITED_MENU=%5B%228312%22%5D; ba17301551dcbaf9_gdp_session_id=2e27fee0-b184-4efa-a66f-f651e5be47e0; ba17301551dcbaf9_gdp_session_id_sent=2e27fee0-b184-4efa-a66f-f651e5be47e0; ba17301551dcbaf9_gdp_sequence_ids={%22globalKey%22:139%2C%22VISIT%22:4%2C%22PAGE%22:18%2C%22VIEW_CLICK%22:117%2C%22VIEW_CHANGE%22:3}' \
+        -H 'Pragma: no-cache' \
+        -H 'Referer: http://www.sse.com.cn/'  \
+        -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36' \
+        --insecure
+        "#;
+
+        let result = commands_parse(input);
+        // println!("result:\r\n({:#?})", result);
+        assert!(result.is_ok(), "result:\r\n({:#?})", result);
+
+        // generic_command_parse(commands_parse, input, expect);
     }
 
     #[test]
