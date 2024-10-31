@@ -26,8 +26,8 @@ impl Default for Protocol {
 }
 
 impl From<&str> for Protocol {
-    fn from(value: &str) -> Self {
-        match value.to_lowercase().as_str() {
+    fn from(protocol: &str) -> Self {
+        match protocol.to_lowercase().as_str() {
             "http" => Self::HTTP,
             "https" => Self::HTTPS,
             "ftp" => Self::FTP,
@@ -46,10 +46,11 @@ impl UserInfo {
             return None;
             // panic!("userinfo should not be empty");
         }
-        let mut res = userinfo.splitn(2, ':');
-        let name = res.next().unwrap_or("").to_string();
-        let pwd = res.next().unwrap_or("").to_string();
-        Some(Self(name, pwd))
+        if let Some((name, pwd)) = userinfo.split_once(':') {
+            Some(Self(name.into(), pwd.into()))
+        } else {
+            None
+        }
     }
 
     pub fn new_explicit(name: &str, pwd: &str) -> Self {
