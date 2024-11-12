@@ -1,5 +1,5 @@
 #[derive(Debug)]
-pub enum Protocol {
+pub enum Schema {
     HTTPS,
     HTTP,
     FTP,
@@ -12,25 +12,25 @@ pub enum Protocol {
     UNKNOWN,
 }
 
-impl Default for Protocol {
+impl Default for Schema {
     fn default() -> Self {
         Self::HTTPS
     }
 }
 
-impl From<&str> for Protocol {
+impl From<&str> for Schema {
     fn from(s: &str) -> Self {
         match s.to_lowercase().as_str() {
-            "https" => Protocol::HTTPS,
-            "http" => Protocol::HTTP,
-            "ftp" => Protocol::FTP,
-            "sftp" => Protocol::SFTP,
-            "tftp" => Protocol::TFTP,
-            "telnet" => Protocol::TELNET,
-            "ldap" => Protocol::LDAP,
-            "ws" => Protocol::WS,
-            "wss" => Protocol::WSS,
-            _ => Protocol::UNKNOWN,
+            "https" => Schema::HTTPS,
+            "http" => Schema::HTTP,
+            "ftp" => Schema::FTP,
+            "sftp" => Schema::SFTP,
+            "tftp" => Schema::TFTP,
+            "telnet" => Schema::TELNET,
+            "ldap" => Schema::LDAP,
+            "ws" => Schema::WS,
+            "wss" => Schema::WSS,
+            _ => Schema::UNKNOWN,
         }
     }
 }
