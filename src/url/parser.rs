@@ -1,5 +1,5 @@
 use super::protocol::Schema;
-use winnow::ascii::{alpha1, till_line_ending};
+use winnow::ascii::till_line_ending;
 use winnow::combinator::{opt, preceded, separated, separated_pair, seq};
 use winnow::token::{take_until, take_while};
 use winnow::{Located, PResult, Parser};
@@ -52,21 +52,11 @@ fn parse_auth_part<'a>(s: &mut Input<'a>) -> PResult<Option<Authority<'a>>> {
 }
 
 fn parse_domain<'a>(s: &mut Input<'a>) -> PResult<&'a str> {
-    let mut parser = take_until(1.., '/');
-    if s.starts_with("://") {
-        preceded("://", parser).parse_next(s)
-    } else {
-        parser.parse_next(s)
-    }
+    take_while(1.., |c| c != '/').parse_next(s)
 }
 
 fn parse_uri<'a>(s: &mut Input<'a>) -> PResult<&'a str> {
-    if s.contains("?") {
-        let mut parser = take_until(1.., '?');
-        preceded('/', parser).parse_next(s)
-    } else {
-        preceded('/', till_line_ending).parse_next(s)
-    }
+    take_while(1.., |c| c != '?').parse_next(s)
 }
 
 fn param_part<'a>(input: &mut Input<'a>) -> PResult<&'a str> {
@@ -101,7 +91,9 @@ pub fn parse_url<'a>(s: &mut Input<'a>) -> PResult<CurlURL<'a>> {
         _: "://",
         authority: parse_auth_part,
         path: parse_domain,
+        _: opt('/'),
         uri: parse_uri,
+        _: opt('?'),
         queries: parse_query_part,
         fragment: parse_fragment,
     })
@@ -143,6 +135,7 @@ mod tests {
     }
 
     #[rstest]
+    #[case("query.sse.com.cn", "query.sse.com.cn")]
     #[case("query.sse.com.cn/", "query.sse.com.cn")]
     fn test_parse_domain(#[case] input: String, #[case] expected: String) {
         let mut input = Located::new(input.as_str());
@@ -151,8 +144,8 @@ mod tests {
     }
 
     #[rstest]
-    #[case("/rust-lang/rust/issues?", "rust-lang/rust/issues")]
-    #[case("/rust-lang/rust/issues", "rust-lang/rust/issues")]
+    #[case("rust-lang/rust/issues?", "rust-lang/rust/issues")]
+    #[case("rust-lang/rust/issues", "rust-lang/rust/issues")]
     fn test_parse_uri(#[case] input: String, #[case] expected: String) {
         let mut input = Located::new(input.as_str());
         let uri = parse_uri(&mut input).unwrap();
