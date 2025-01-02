@@ -24,7 +24,7 @@ pub struct CurlURL<'a> {
     authority: Option<Authority<'a>>,
     path: &'a str,
     uri: &'a str,
-    queries: Option<Vec<QueryString<'a>>>,
+    queries: Vec<QueryString<'a>>,
     fragment: Option<&'a str>,
 }
 
@@ -73,16 +73,12 @@ fn parse_params<'a>(s: &mut Input<'a>) -> PResult<QueryString<'a>> {
         .parse_next(s)
 }
 
-fn parse_query_string<'a>(s: &mut Input<'a>) -> PResult<Vec<QueryString<'a>>> {
-    separated(1.., parse_params, "&").parse_next(s)
-}
-
-fn parse_query_part<'a>(s: &mut Input<'a>) -> PResult<Option<Vec<QueryString<'a>>>> {
-    opt(("?", parse_query_string).map(|(_, queries)| queries)).parse_next(s)
+fn parse_query_part<'a>(s: &mut Input<'a>) -> PResult<Vec<QueryString<'a>>> {
+    separated(0.., parse_params, "&").parse_next(s)
 }
 
 fn parse_fragment<'a>(s: &mut Input<'a>) -> PResult<Option<&'a str>> {
-    opt(('#', till_line_ending).map(|(_, fragment)| fragment)).parse_next(s)
+    opt(till_line_ending.map(|fragment| fragment)).parse_next(s)
 }
 
 pub fn parse_url<'a>(s: &mut Input<'a>) -> PResult<CurlURL<'a>> {
@@ -95,6 +91,7 @@ pub fn parse_url<'a>(s: &mut Input<'a>) -> PResult<CurlURL<'a>> {
         uri: parse_uri,
         _: opt('?'),
         queries: parse_query_part,
+        _: opt('#'),
         fragment: parse_fragment,
     })
     .parse_next(s)
@@ -164,9 +161,25 @@ mod tests {
     #[rstest]
     #[case("labels=E-easy", vec![QueryString { key: "labels", value: "E-easy" }])]
     #[case("labels=E-easy&state=open", vec![QueryString { key: "labels", value: "E-easy" }, QueryString { key: "state", value: "open" }])]
-    fn test_parse_query_string(#[case] input: String, #[case] expected: Vec<QueryString>) {
+    fn test_parse_query_part(#[case] input: String, #[case] expected: Vec<QueryString>) {
         let mut input = Located::new(input.as_str());
-        let query = parse_query_string(&mut input).unwrap();
+        let query = parse_query_part(&mut input).unwrap();
         assert_eq!(query, expected)
+    }
+
+    #[rstest]
+    #[case("ABC", Some("ABC"))]
+    fn test_parse_fragment(#[case] input: String, #[case] expected: Option<&str>) {
+        let mut input = Located::new(input.as_str());
+        let fragment = parse_fragment(&mut input).unwrap();
+        assert_eq!(fragment, expected)
+    }
+
+    #[rstest]
+    #[case("https://github.com/rust-lang/rust/issues", CurlURL { schema: Schema::HTTPS, authority: None, path: "github.com", uri: "rust-lang/rust/issues", queries: vec![], fragment: None })]
+    fn test_parse_url(#[case] input: String, #[case] expected: CurlURL) {
+        let mut input = Located::new(input.as_str());
+        let url = parse_url(&mut input).unwrap();
+        assert_eq!(url, expected)
     }
 }

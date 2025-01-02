@@ -14,7 +14,7 @@ fn test_parse_with_auth() {
 
 #[test]
 fn test_parse_without_auth() {
-    let mut input = "https://github.com/rust-lang/rust/issues";
+    let input = "https://github.com/rust-lang/rust/issues";
     let mut input = Located::new(input);
     let url = parse_url(&mut input);
 
