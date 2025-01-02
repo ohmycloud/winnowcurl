@@ -102,6 +102,7 @@ mod tests {
 
     #[rstest]
     #[case("https://", Schema::HTTPS)]
+    #[case("sftp://", Schema::SFTP)]
     fn test_parse_schema(#[case] input: String, #[case] expected: Schema) {
         let mut input = Located::new(input.as_str());
         let schema = parse_schema(&mut input).unwrap();
