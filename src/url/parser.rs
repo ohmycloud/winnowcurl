@@ -1,9 +1,7 @@
 use super::protocol::Schema;
-use clap::builder::TypedValueParser;
 use winnow::ascii::{alpha1, till_line_ending};
-use winnow::combinator::{opt, preceded, seq};
-use winnow::combinator::{separated, separated_pair};
-use winnow::token::take_until;
+use winnow::combinator::{opt, preceded, separated, separated_pair, seq};
+use winnow::token::{take_until, take_while};
 use winnow::{Located, PResult, Parser};
 
 type Input<'a> = Located<&'a str>;
@@ -71,8 +69,16 @@ fn parse_uri<'a>(s: &mut Input<'a>) -> PResult<&'a str> {
     }
 }
 
+fn param_part<'a>(input: &mut Input<'a>) -> PResult<&'a str> {
+    take_while(
+        1..,
+        |c| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '.' | '_' | '~' | '%' | '+'),
+    )
+    .parse_next(input)
+}
+
 fn parse_params<'a>(s: &mut Input<'a>) -> PResult<QueryString<'a>> {
-    separated_pair(take_until(1.., "="), '=', take_until(1.., "&"))
+    separated_pair(param_part, '=', param_part)
         .map(|(key, value)| QueryString { key, value })
         .parse_next(s)
 }
@@ -122,5 +128,51 @@ mod tests {
         let mut input = Located::new(input.as_str());
         let authority = parse_authority(&mut input).unwrap();
         assert_eq!(authority, expected)
+    }
+
+    #[rstest]
+    #[case("://username:password@github", Some(Authority {username: "username", password: "password"}))]
+    #[case("://@", None)]
+    #[case("://abc", None)]
+    #[case("://abc@", None)]
+    fn test_parse_auth_part(#[case] input: String, #[case] expected: Option<Authority>) {
+        let mut input = Located::new(input.as_str());
+        let authority = parse_auth_part(&mut input).unwrap();
+        assert_eq!(authority, expected)
+    }
+
+    #[rstest]
+    #[case("query.sse.com.cn/", "query.sse.com.cn")]
+    fn test_parse_domain(#[case] input: String, #[case] expected: String) {
+        let mut input = Located::new(input.as_str());
+        let domain = parse_domain(&mut input).unwrap();
+        assert_eq!(domain, expected)
+    }
+
+    #[rstest]
+    #[case("/rust-lang/rust/issues?", "rust-lang/rust/issues")]
+    #[case("/rust-lang/rust/issues", "rust-lang/rust/issues")]
+    fn test_parse_uri(#[case] input: String, #[case] expected: String) {
+        let mut input = Located::new(input.as_str());
+        let uri = parse_uri(&mut input).unwrap();
+        assert_eq!(uri, expected)
+    }
+
+    #[rstest]
+    #[case("labels=E-easy", QueryString { key: "labels", value: "E-easy" })]
+    #[case("labels=E-easy&state=open", QueryString { key: "labels", value: "E-easy" })]
+    fn test_parse_params(#[case] input: String, #[case] expected: QueryString) {
+        let mut input = Located::new(input.as_str());
+        let params = parse_params(&mut input).unwrap();
+        assert_eq!(params, expected)
+    }
+
+    #[rstest]
+    #[case("labels=E-easy", vec![QueryString { key: "labels", value: "E-easy" }])]
+    #[case("labels=E-easy&state=open", vec![QueryString { key: "labels", value: "E-easy" }, QueryString { key: "state", value: "open" }])]
+    fn test_parse_query_string(#[case] input: String, #[case] expected: Vec<QueryString>) {
+        let mut input = Located::new(input.as_str());
+        let query = parse_query_string(&mut input).unwrap();
+        assert_eq!(query, expected)
     }
 }
