@@ -29,7 +29,7 @@ pub struct CurlURL<'a> {
 }
 
 fn parse_schema<'a>(s: &mut Input<'a>) -> PResult<Schema> {
-    let schema = take_until(1.., ':').parse_next(s)?.into();
+    let schema = take_while(1.., |c| c != ':').parse_next(s)?.into();
     Ok(schema)
 }
 
@@ -42,9 +42,9 @@ fn prse_password<'a>(s: &mut Input<'a>) -> PResult<&'a str> {
 }
 
 fn parse_authority<'a>(s: &mut Input<'a>) -> PResult<Authority<'a>> {
-    let mut parser = separated_pair(parse_user, ':', prse_password)
-        .map(|(username, password)| Authority { username, password });
-    preceded("://", parser).parse_next(s)
+    separated_pair(parse_user, ':', prse_password)
+        .map(|(username, password)| Authority { username, password })
+        .parse_next(s)
 }
 
 fn parse_auth_part<'a>(s: &mut Input<'a>) -> PResult<Option<Authority<'a>>> {
@@ -98,6 +98,7 @@ fn parse_fragment<'a>(s: &mut Input<'a>) -> PResult<Option<&'a str>> {
 pub fn parse_url<'a>(s: &mut Input<'a>) -> PResult<CurlURL<'a>> {
     seq!(CurlURL {
         schema: parse_schema,
+        _: "://",
         authority: parse_auth_part,
         path: parse_domain,
         uri: parse_uri,
@@ -113,8 +114,8 @@ mod tests {
     use rstest::*;
 
     #[rstest]
-    #[case("https://", Schema::HTTPS)]
-    #[case("sftp://", Schema::SFTP)]
+    #[case("https:", Schema::HTTPS)]
+    #[case("sftp", Schema::SFTP)]
     fn test_parse_schema(#[case] input: String, #[case] expected: Schema) {
         let mut input = Located::new(input.as_str());
         let schema = parse_schema(&mut input).unwrap();
@@ -122,8 +123,8 @@ mod tests {
     }
 
     #[rstest]
-    #[case("://username:password@github", Authority {username: "username", password: "password"})]
-    #[case("://admin:aBc%40123@github", Authority {username: "admin", password: "aBc%40123"})]
+    #[case("username:password@github", Authority {username: "username", password: "password"})]
+    #[case("admin:aBc%40123@github", Authority {username: "admin", password: "aBc%40123"})]
     fn test_parse_authority(#[case] input: String, #[case] expected: Authority) {
         let mut input = Located::new(input.as_str());
         let authority = parse_authority(&mut input).unwrap();
@@ -131,10 +132,10 @@ mod tests {
     }
 
     #[rstest]
-    #[case("://username:password@github", Some(Authority {username: "username", password: "password"}))]
-    #[case("://@", None)]
-    #[case("://abc", None)]
-    #[case("://abc@", None)]
+    #[case("username:password@github", Some(Authority {username: "username", password: "password"}))]
+    #[case("@", None)]
+    #[case("abc", None)]
+    #[case("abc@", None)]
     fn test_parse_auth_part(#[case] input: String, #[case] expected: Option<Authority>) {
         let mut input = Located::new(input.as_str());
         let authority = parse_auth_part(&mut input).unwrap();
