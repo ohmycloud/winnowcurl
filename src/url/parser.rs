@@ -8,19 +8,19 @@ use winnow::{Located, PResult, Parser};
 
 type Input<'a> = Located<&'a str>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct QueryString<'a> {
     pub key: &'a str,
     pub value: &'a str,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Authority<'a> {
     pub username: &'a str,
     pub password: &'a str,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CurlURL<'a> {
     schema: Schema,
     authority: Option<Authority<'a>>,
@@ -31,14 +31,20 @@ pub struct CurlURL<'a> {
 }
 
 fn parse_schema<'a>(s: &mut Input<'a>) -> PResult<Schema> {
-    let mut parser = take_until(1.., ':');
-    let schema = parser.parse_next(s)?;
-    let schema: Schema = schema.into();
+    let schema = take_until(1.., ':').parse_next(s)?.into();
     Ok(schema)
 }
 
+fn parse_user<'a>(s: &mut Input<'a>) -> PResult<&'a str> {
+    take_until(1.., ':').parse_next(s)
+}
+
+fn prse_password<'a>(s: &mut Input<'a>) -> PResult<&'a str> {
+    take_until(1.., '@').parse_next(s)
+}
+
 fn parse_authority<'a>(s: &mut Input<'a>) -> PResult<Authority<'a>> {
-    let mut parser = separated_pair(alpha1, ':', alpha1)
+    let mut parser = separated_pair(parse_user, ':', prse_password)
         .map(|(username, password)| Authority { username, password });
     preceded("://", parser).parse_next(s)
 }
@@ -107,5 +113,14 @@ mod tests {
         let mut input = Located::new(input.as_str());
         let schema = parse_schema(&mut input).unwrap();
         assert_eq!(schema, expected)
+    }
+
+    #[rstest]
+    #[case("://username:password@github", Authority {username: "username", password: "password"})]
+    #[case("://admin:aBc%40123@github", Authority {username: "admin", password: "aBc%40123"})]
+    fn test_parse_authority(#[case] input: String, #[case] expected: Authority) {
+        let mut input = Located::new(input.as_str());
+        let authority = parse_authority(&mut input).unwrap();
+        assert_eq!(authority, expected)
     }
 }
