@@ -78,7 +78,7 @@ fn parse_query_part<'a>(s: &mut Input<'a>) -> PResult<Vec<QueryString<'a>>> {
 }
 
 fn parse_fragment<'a>(s: &mut Input<'a>) -> PResult<Option<&'a str>> {
-    opt(till_line_ending.map(|fragment| fragment)).parse_next(s)
+    opt(till_line_ending).parse_next(s)
 }
 
 pub fn parse_url<'a>(s: &mut Input<'a>) -> PResult<CurlURL<'a>> {
