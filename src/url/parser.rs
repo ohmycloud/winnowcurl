@@ -193,6 +193,20 @@ mod tests {
             fragment: None
         }
     )]
+    #[case(
+        "https://user:passwd@github.com/rust-lang/rust/issues?labels=E-easy&state=open#ABC",
+        CurlURL {
+            schema: Schema::HTTPS,
+            authority: Some(Authority { username: "user", password: "passwd" }),
+            path: "github.com",
+            uri: "rust-lang/rust/issues",
+            queries: vec![
+                QueryString { key: "labels", value: "E-easy" },
+                QueryString { key: "state", value: "open" }
+            ],
+            fragment: Some("ABC")
+        }
+    )]
     fn test_parse_url(#[case] input: String, #[case] expected: CurlURL) {
         let mut input = Located::new(input.as_str());
         let url = parse_url(&mut input).unwrap();
