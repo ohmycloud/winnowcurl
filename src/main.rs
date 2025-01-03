@@ -1,8 +1,9 @@
-use clap::{Command, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use curl::{curl_parsers::curl_cmd_parse, Curl};
 
 pub mod curl;
 mod test_util;
+pub mod url;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum CurlCommand {
@@ -63,9 +64,5 @@ fn main() {
             }
             Err(e) => eprintln!("Error parsing curl command: {:?}", e),
         },
-        _ => {
-            Command::new("nomcurl").print_help().unwrap();
-            println!();
-        }
     }
 }

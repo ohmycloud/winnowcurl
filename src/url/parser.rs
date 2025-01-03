@@ -20,12 +20,12 @@ pub struct Authority<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct CurlURL<'a> {
-    schema: Schema,
-    authority: Option<Authority<'a>>,
-    path: &'a str,
-    uri: &'a str,
-    queries: Vec<QueryString<'a>>,
-    fragment: Option<&'a str>,
+    pub schema: Schema,
+    pub authority: Option<Authority<'a>>,
+    pub path: &'a str,
+    pub uri: &'a str,
+    pub queries: Vec<QueryString<'a>>,
+    pub fragment: Option<&'a str>,
 }
 
 fn parse_schema<'a>(s: &mut Input<'a>) -> PResult<Schema> {

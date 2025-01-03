@@ -1,5 +1,5 @@
-use nomcurl::url::parser::parse_url;
 use winnow::Located;
+use winnowcurl::url::parser::parse_url;
 
 #[test]
 fn test_parse_with_auth() {

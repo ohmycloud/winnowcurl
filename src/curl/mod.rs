@@ -1,4 +1,5 @@
 pub mod curl_parsers;
+pub mod parser;
 pub mod url_parser;
 
 // use url::Url;
