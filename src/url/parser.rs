@@ -1,6 +1,6 @@
 use super::protocol::Schema;
-use winnow::ascii::till_line_ending;
-use winnow::combinator::{opt, preceded, separated, separated_pair, seq};
+use winnow::ascii::alphanumeric1;
+use winnow::combinator::{opt, separated, separated_pair, seq};
 use winnow::token::{take_until, take_while};
 use winnow::{Located, PResult, Parser};
 
@@ -78,7 +78,7 @@ fn parse_query_part<'a>(s: &mut Input<'a>) -> PResult<Vec<QueryString<'a>>> {
 }
 
 fn parse_fragment<'a>(s: &mut Input<'a>) -> PResult<Option<&'a str>> {
-    opt(till_line_ending).parse_next(s)
+    opt(alphanumeric1).parse_next(s)
 }
 
 pub fn parse_url<'a>(s: &mut Input<'a>) -> PResult<CurlURL<'a>> {
