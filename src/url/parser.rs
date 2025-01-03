@@ -160,7 +160,13 @@ mod tests {
 
     #[rstest]
     #[case("labels=E-easy", vec![QueryString { key: "labels", value: "E-easy" }])]
-    #[case("labels=E-easy&state=open", vec![QueryString { key: "labels", value: "E-easy" }, QueryString { key: "state", value: "open" }])]
+    #[case(
+        "labels=E-easy&state=open",
+        vec![
+            QueryString { key: "labels", value: "E-easy" },
+            QueryString { key: "state", value: "open" }
+        ]
+    )]
     fn test_parse_query_part(#[case] input: String, #[case] expected: Vec<QueryString>) {
         let mut input = Located::new(input.as_str());
         let query = parse_query_part(&mut input).unwrap();
@@ -176,7 +182,17 @@ mod tests {
     }
 
     #[rstest]
-    #[case("https://github.com/rust-lang/rust/issues", CurlURL { schema: Schema::HTTPS, authority: None, path: "github.com", uri: "rust-lang/rust/issues", queries: vec![], fragment: None })]
+    #[case(
+        "https://github.com/rust-lang/rust/issues",
+        CurlURL {
+            schema: Schema::HTTPS,
+            authority: None,
+            path: "github.com",
+            uri: "rust-lang/rust/issues",
+            queries: vec![],
+            fragment: None
+        }
+    )]
     fn test_parse_url(#[case] input: String, #[case] expected: CurlURL) {
         let mut input = Located::new(input.as_str());
         let url = parse_url(&mut input).unwrap();
