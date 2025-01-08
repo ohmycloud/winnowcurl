@@ -25,6 +25,15 @@ fn parse_double_quoted_data<'a>(s: &mut Input<'a>) -> PResult<&'a str> {
     delimited((multispace0, '"'), take_until(0.., '"'), ('"', multispace0)).parse_next(s)
 }
 
+fn parse_single_quoted_data<'a>(s: &mut Input<'a>) -> PResult<&'a str> {
+    delimited(
+        (multispace0, '\''),
+        take_until(0.., '\''),
+        ('\'', multispace0),
+    )
+    .parse_next(s)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -36,6 +45,15 @@ mod tests {
     fn test_parse_double_quoted_data(#[case] input: String, #[case] expected: String) {
         let mut input = Located::new(input.as_str());
         let double_quoted_data = parse_double_quoted_data(&mut input).unwrap();
+        assert_eq!(double_quoted_data, expected)
+    }
+
+    #[rstest]
+    #[case(r#" 'rakudo star' "#, "rakudo star")]
+    #[case(r#"'rakulang "rocks"'"#, r#"rakulang "rocks""#)]
+    fn test_parse_single_quoted_data(#[case] input: String, #[case] expected: String) {
+        let mut input = Located::new(input.as_str());
+        let double_quoted_data = parse_single_quoted_data(&mut input).unwrap();
         assert_eq!(double_quoted_data, expected)
     }
 }
