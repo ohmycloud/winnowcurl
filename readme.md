@@ -1,8 +1,8 @@
-# nom-curl: A cURL Command Parser in Rust
+# winnow-curl: A cURL Command Parser in Rust
 
-[中文](./readme-cn.md) | [English](./readme.md) 
+[中文](./readme-cn.md) | [English](./readme.md)
 
-`nom-curl` is a Rust library for parsing cURL commands using the `nom` parser combinator library. It can handle various cURL options, including methods, headers, data, and flags.
+`winnow-curl` is a Rust library for parsing cURL commands using the `winnow` parser combinator library. It can handle various cURL options, including methods, headers, data, and flags.
 
 ## Features
 
@@ -13,17 +13,17 @@
 
 ## Installation
 
-Add `nom-curl` to your `Cargo.toml` file:
+Add `winnow-curl` to your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-nom-curl = "0.1.8"
+winnow-curl = "0.1.8"
 ```
 
 ## Usage
 
 ```rust
-use nom_curl::parsers::curl_cmd_parse;
+use winnow_curl::parsers::curl_cmd_parse;
 
 fn main() {
     let curl_command = "curl 'http://example.com' -X GET -H 'Accept: application/json'";
@@ -34,14 +34,14 @@ fn main() {
 
 ## Documentation
 
-For detailed API documentation and guides, visit [here](https://docs.rs/nom-curl).
+For detailed API documentation and guides, visit [here](https://docs.rs/winnow-curl).
 
 ## Examples
 
 ### Parsing a Simple cURL Command
 
 ```rust
-use nom_curl::parsers::curl_cmd_parse;
+use winnow_curl::parsers::curl_cmd_parse;
 
 let curl_command = "curl 'http://example.com' -X GET";
 let result = curl_cmd_parse(curl_command);
@@ -51,7 +51,7 @@ assert!(result.is_ok());
 ### Parsing a cURL Command with Data
 
 ```rust
-use nom_curl::parsers::curl_cmd_parse;
+use winnow_curl::parsers::curl_cmd_parse;
 
 let curl_command = "curl 'http://example.com' -d 'name=John&age=30'";
 let result = curl_cmd_parse(curl_command);
@@ -60,9 +60,8 @@ assert!(result.is_ok());
 
 ## Contributing
 
-We welcome any contributions! Please review the [contribution guidelines](https://github.com/yourusername/nom-curl/blob/master/CONTRIBUTING.md) before submitting a pull request.
+We welcome any contributions! Please review the [contribution guidelines](https://github.com/yourusername/winnow-curl/blob/master/CONTRIBUTING.md) before submitting a pull request.
 
 ## License
 
-`nom-curl` is released under the MIT license. 
-
+`winnow-curl` is released under the MIT license.
