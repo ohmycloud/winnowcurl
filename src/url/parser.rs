@@ -2,9 +2,9 @@ use super::protocol::Schema;
 use winnow::ascii::alphanumeric1;
 use winnow::combinator::{opt, separated, separated_pair, seq};
 use winnow::token::{take_until, take_while};
-use winnow::{Located, PResult, Parser};
+use winnow::{LocatingSlice, ModalResult, Parser};
 
-type Input<'a> = Located<&'a str>;
+type Input<'a> = LocatingSlice<&'a str>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct QueryString<'a> {
@@ -28,38 +28,38 @@ pub struct CurlURL<'a> {
     pub fragment: Option<&'a str>,
 }
 
-fn parse_schema<'a>(s: &mut Input<'a>) -> PResult<Schema> {
+fn parse_schema<'a>(s: &mut Input<'a>) -> ModalResult<Schema> {
     let schema = take_while(1.., |c| c != ':').parse_next(s)?.into();
     Ok(schema)
 }
 
-fn parse_user<'a>(s: &mut Input<'a>) -> PResult<&'a str> {
+fn parse_user<'a>(s: &mut Input<'a>) -> ModalResult<&'a str> {
     take_until(1.., ':').parse_next(s)
 }
 
-fn prse_password<'a>(s: &mut Input<'a>) -> PResult<&'a str> {
+fn prse_password<'a>(s: &mut Input<'a>) -> ModalResult<&'a str> {
     take_until(1.., '@').parse_next(s)
 }
 
-fn parse_authority<'a>(s: &mut Input<'a>) -> PResult<Authority<'a>> {
+fn parse_authority<'a>(s: &mut Input<'a>) -> ModalResult<Authority<'a>> {
     separated_pair(parse_user, ':', prse_password)
         .map(|(username, password)| Authority { username, password })
         .parse_next(s)
 }
 
-fn parse_auth_part<'a>(s: &mut Input<'a>) -> PResult<Option<Authority<'a>>> {
+fn parse_auth_part<'a>(s: &mut Input<'a>) -> ModalResult<Option<Authority<'a>>> {
     opt((parse_authority, "@").map(|(auth, _)| auth)).parse_next(s)
 }
 
-fn parse_domain<'a>(s: &mut Input<'a>) -> PResult<&'a str> {
+fn parse_domain<'a>(s: &mut Input<'a>) -> ModalResult<&'a str> {
     take_while(1.., |c| c != '/').parse_next(s)
 }
 
-fn parse_uri<'a>(s: &mut Input<'a>) -> PResult<&'a str> {
+fn parse_uri<'a>(s: &mut Input<'a>) -> ModalResult<&'a str> {
     take_while(1.., |c| c != '?').parse_next(s)
 }
 
-fn param_part<'a>(input: &mut Input<'a>) -> PResult<&'a str> {
+fn param_part<'a>(input: &mut Input<'a>) -> ModalResult<&'a str> {
     take_while(
         1..,
         |c| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '.' | '_' | '~' | '%' | '+'),
@@ -67,21 +67,21 @@ fn param_part<'a>(input: &mut Input<'a>) -> PResult<&'a str> {
     .parse_next(input)
 }
 
-fn parse_params<'a>(s: &mut Input<'a>) -> PResult<QueryString<'a>> {
+fn parse_params<'a>(s: &mut Input<'a>) -> ModalResult<QueryString<'a>> {
     separated_pair(param_part, '=', param_part)
         .map(|(key, value)| QueryString { key, value })
         .parse_next(s)
 }
 
-fn parse_query_part<'a>(s: &mut Input<'a>) -> PResult<Vec<QueryString<'a>>> {
+fn parse_query_part<'a>(s: &mut Input<'a>) -> ModalResult<Vec<QueryString<'a>>> {
     separated(0.., parse_params, "&").parse_next(s)
 }
 
-fn parse_fragment<'a>(s: &mut Input<'a>) -> PResult<Option<&'a str>> {
+fn parse_fragment<'a>(s: &mut Input<'a>) -> ModalResult<Option<&'a str>> {
     opt(alphanumeric1).parse_next(s)
 }
 
-pub fn parse_url<'a>(s: &mut Input<'a>) -> PResult<CurlURL<'a>> {
+pub fn parse_url<'a>(s: &mut Input<'a>) -> ModalResult<CurlURL<'a>> {
     seq!(CurlURL {
         schema: parse_schema,
         _: "://",
@@ -106,7 +106,7 @@ mod tests {
     #[case("https:", Schema::HTTPS)]
     #[case("sftp", Schema::SFTP)]
     fn test_parse_schema(#[case] input: String, #[case] expected: Schema) {
-        let mut input = Located::new(input.as_str());
+        let mut input = LocatingSlice::new(input.as_str());
         let schema = parse_schema(&mut input).unwrap();
         assert_eq!(schema, expected)
     }
@@ -115,7 +115,7 @@ mod tests {
     #[case("username:password@github", Authority {username: "username", password: "password"})]
     #[case("admin:aBc%40123@github", Authority {username: "admin", password: "aBc%40123"})]
     fn test_parse_authority(#[case] input: String, #[case] expected: Authority) {
-        let mut input = Located::new(input.as_str());
+        let mut input = LocatingSlice::new(input.as_str());
         let authority = parse_authority(&mut input).unwrap();
         assert_eq!(authority, expected)
     }
@@ -126,7 +126,7 @@ mod tests {
     #[case("abc", None)]
     #[case("abc@", None)]
     fn test_parse_auth_part(#[case] input: String, #[case] expected: Option<Authority>) {
-        let mut input = Located::new(input.as_str());
+        let mut input = LocatingSlice::new(input.as_str());
         let authority = parse_auth_part(&mut input).unwrap();
         assert_eq!(authority, expected)
     }
@@ -135,7 +135,7 @@ mod tests {
     #[case("query.sse.com.cn", "query.sse.com.cn")]
     #[case("query.sse.com.cn/", "query.sse.com.cn")]
     fn test_parse_domain(#[case] input: String, #[case] expected: String) {
-        let mut input = Located::new(input.as_str());
+        let mut input = LocatingSlice::new(input.as_str());
         let domain = parse_domain(&mut input).unwrap();
         assert_eq!(domain, expected)
     }
@@ -144,7 +144,7 @@ mod tests {
     #[case("rust-lang/rust/issues?", "rust-lang/rust/issues")]
     #[case("rust-lang/rust/issues", "rust-lang/rust/issues")]
     fn test_parse_uri(#[case] input: String, #[case] expected: String) {
-        let mut input = Located::new(input.as_str());
+        let mut input = LocatingSlice::new(input.as_str());
         let uri = parse_uri(&mut input).unwrap();
         assert_eq!(uri, expected)
     }
@@ -153,7 +153,7 @@ mod tests {
     #[case("labels=E-easy", QueryString { key: "labels", value: "E-easy" })]
     #[case("labels=E-easy&state=open", QueryString { key: "labels", value: "E-easy" })]
     fn test_parse_params(#[case] input: String, #[case] expected: QueryString) {
-        let mut input = Located::new(input.as_str());
+        let mut input = LocatingSlice::new(input.as_str());
         let params = parse_params(&mut input).unwrap();
         assert_eq!(params, expected)
     }
@@ -168,7 +168,7 @@ mod tests {
         ]
     )]
     fn test_parse_query_part(#[case] input: String, #[case] expected: Vec<QueryString>) {
-        let mut input = Located::new(input.as_str());
+        let mut input = LocatingSlice::new(input.as_str());
         let query = parse_query_part(&mut input).unwrap();
         assert_eq!(query, expected)
     }
@@ -176,7 +176,7 @@ mod tests {
     #[rstest]
     #[case("ABC", Some("ABC"))]
     fn test_parse_fragment(#[case] input: String, #[case] expected: Option<&str>) {
-        let mut input = Located::new(input.as_str());
+        let mut input = LocatingSlice::new(input.as_str());
         let fragment = parse_fragment(&mut input).unwrap();
         assert_eq!(fragment, expected)
     }
@@ -208,7 +208,7 @@ mod tests {
         }
     )]
     fn test_parse_url(#[case] input: String, #[case] expected: CurlURL) {
-        let mut input = Located::new(input.as_str());
+        let mut input = LocatingSlice::new(input.as_str());
         let url = parse_url(&mut input).unwrap();
         assert_eq!(url, expected)
     }

@@ -7,7 +7,7 @@ readme = "./readme.md"
 keywords = ["parser", "winnow", "curl", "cmd"]
 version = "0.1.8"
 license = "MIT"
-edition = "2021"
+edition = "2024"
 
 include = [
     "LICENSE",
@@ -22,10 +22,10 @@ include = [
 [dependencies]
 nom = "7.1.3"
 clap = { version = "4.5.20", features = ["derive"] }
-winnow = "0.6.21"
+winnow = "0.7.4"
 
 [features]
 debug-print = []
 
 [dev-dependencies]
-rstest = "0.24.0"
+rstest = "0.25.0"
