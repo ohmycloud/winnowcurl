@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use curl::{curl_parsers::curl_cmd_parse, Curl};
+use curl::parser::{curl_cmd_parse, Curl};
 
 pub mod curl;
 mod test_util;
@@ -28,9 +28,9 @@ impl CurlCommand {
 }
 
 #[derive(Parser)]
-#[command(name = "nomcurl")]
+#[command(name = "winnowcurl")]
 #[command(version = "0.1.0")]
-#[command(about = "A CLI tool to parse and manipulate curl commands")]
+#[command(about = "A CLI tool to parse and manipulate curl commands using winnow")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -54,7 +54,7 @@ fn main() {
 
     match cli.command {
         Commands::Parse { command, part } => match curl_cmd_parse(&command) {
-            Ok((_remaining, curls)) => {
+            Ok(curls) => {
                 let filtered_curls = curls
                     .iter()
                     .filter(|c| part.map_or(true, |part_type| part_type.matches_curl(c)));
@@ -62,7 +62,7 @@ fn main() {
                     println!("{:?}", curl);
                 }
             }
-            Err(e) => eprintln!("Error parsing curl command: {:?}", e),
+            Err(e) => eprintln!("Error parsing curl command: {}", e),
         },
     }
 }
