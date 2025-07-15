@@ -155,7 +155,7 @@ pub fn commands_parse<'a>(s: &mut Input<'a>) -> ModalResult<Vec<Curl<'a>>> {
 }
 
 /// Parse complete curl command
-pub fn curl_cmd_parse(input: &str) -> Result<Vec<Curl>, String> {
+pub fn curl_cmd_parse(input: &str) -> Result<Vec<Curl<'_>>, String> {
     if !is_curl(input) {
         return Err("Input does not start with curl".to_string());
     }
